@@ -1,5 +1,3 @@
-# Tu-2025-IndividualBabyNetworks
-
 ## Commonality and Variability in Functional Networks in Children Under 5 Years Old
 
 # Abstract \n
