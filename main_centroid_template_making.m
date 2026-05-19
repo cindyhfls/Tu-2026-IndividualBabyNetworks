@@ -1,25 +1,17 @@
 clear
-master_dir = pwd
-addpath(master_dir)
-addpath([master_dir,'/Util'])
-addpath(genpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup'));
-rmpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup/tmp');
-rmpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup/legacy');
-addpath(genpath('/data/wheelock/data1/people/Cindy/PublicRepo/NLA_toolbox_070319/NLA visualizationfunctions'));
+[master_dir, ~, ~] = fileparts(mfilename('fullpath'));
+addpath(genpath(master_dir))
+addpath(genpath('../BrBx-HSB_infomap_cleanup'));
+addpath(genpath('../NLA_toolbox_070319/NLA visualizationfunctions'));
 
-load('/data/wheelock/data1/people/Cindy/PublicRepo/GeneralizabilityAreaParcellation/NetworkCommunityAssignments/IM_Tu326_19Networks.mat','IM');
+load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_19Networks.mat','IM');
 IM_Tu19 = IM;
-load('/data/wheelock/data1/people/Cindy/PublicRepo/GeneralizabilityAreaParcellation/NetworkCommunityAssignments/IM_Tu326_12Networks.mat','IM');
+load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_12Networks.mat','IM');
 IM_Tu12 = IM;
-
 load('IM_Gordon_13nets_333Parcels_Renamed2024.mat','IM');
 IM_Gordon = IM;
-load('/data/wheelock/data1/parcellations/IM/IM_MyersLabonte_23Networks.mat','IM');
-IM_MyersLabonte = IM; IM_MyersLabonte.Nets{end} = 'Unspecified';
-load('/data/wheelock/data1/parcellations/IM/IM_Gordon2017vertex','IM');
-IM_Gordon2017vertex = IM;
-
 clear IM
+
 % Load parcels
 Parcels_Tu_326 = smartload('Parcels_Tu_326.mat');
 Parcels_Gordon = smartload('Parcels_Gordon.mat');
@@ -89,8 +81,6 @@ end
 save([centroid_filename,'_centroids.mat'],'centroids*');
 
 %% K-means with cross-validation to find K
-
-
 %% Calculate different number of clusters
 % N.B. It seems 100 replicates produces more stable results across split
 % halves than 10 replicates
@@ -145,8 +135,6 @@ set(gca,'FontSize',12);
 % print(['./Figure/',centroid_filename,'_kmeans_NMI'],'-dpng','-r300')
 
 %% Obtain final best k
-
-
 %% Fit the final k with all data and save the best k centroid
 bestk = 23 % based on stability
 tic
@@ -164,7 +152,7 @@ eval('assn = assn_bestk;',num2str(bestk));
 assn = reshape(assn,nROI,[]);
 prop = calc_network_prop(assn,1:k);
 
-for iNet = 1:k%k
+for iNet = 1:k
     View_prop_Colors_transparent(prop(:,iNet),Parcels)
     %     print(gcf,fullfile('./Figure/',sprintf('ProportionNetworks%02d',iNet)),'-dpng','-r300');
     %     pause;
@@ -193,7 +181,6 @@ for i = 1:N
     set(h(i),'Color','k','MarkerFaceColor',CW.cMap(i,:));
 end
 legend(CW.Nets,'interpreter','none','FontSize',10,'location','best','Orientation','horizontal','NumColumns',3);
-% legend(CW.Nets,'interpreter','none','FontSize',10,'location','best','Orientation','horizontal','NumColumns',1);
 legend('boxoff')
 xlim([10,11]);
 axis('off')
@@ -228,12 +215,11 @@ cmap = CW.cMap
 
 assn = reshape(assn,nROI,[]);
 
-icol = 28 %14/42 28/66
+icol = 28 
 plot_network_assignment_parcel_key(Parcels, assn(:,icol),cmap)
 print(['./Figure/brain_plot_session',num2str(icol),'.png'],'-dpng','-r300')
 
 %% Plot distance, silhouette and network templates
-% cmap = distinguishable_colors(bestk);
 cmap = CW.cMap; % hand-fixed networks
 D_bestk = cell(bestk,1);
 for inet = 1:bestk

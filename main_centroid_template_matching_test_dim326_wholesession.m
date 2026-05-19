@@ -1,26 +1,19 @@
 clear
-master_dir = '/data/wheelock/data1/people/Cindy/rfMRI_VAE/rsfMRI-VAE'
-addpath(master_dir)
-addpath(genpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup'));
-rmpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup/tmp');
-rmpath('/data/wheelock/data1/people/Cindy/PublicRepo/BrBx-HSB_infomap_cleanup/legacy');
-addpath(genpath('/data/wheelock/data1/people/Cindy/PublicRepo/NLA_toolbox_070319/NLA visualizationfunctions'));
-addpath([master_dir,'/subjlists']);
+[master_dir, ~, ~] = fileparts(mfilename('fullpath'));addpath(genpath(master_dir))
+addpath(genpath('../PublicRepo/BrBx-HSB_infomap_cleanup'));
+addpath(genpath('../NLA_toolbox_070319/NLA visualizationfunctions'));
 addpath([master_dir,'/CIFTI_read_save'])
 
-load('/data/wheelock/data1/people/Cindy/PublicRepo/GeneralizabilityAreaParcellation/NetworkCommunityAssignments/IM_Tu326_12Networks.mat','IM');
+load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_12Networks.mat','IM');
 IM_Tu12 = IM;
-load('/data/wheelock/data1/people/Cindy/PublicRepo/GeneralizabilityAreaParcellation/NetworkCommunityAssignments/IM_Tu326_19Networks.mat','IM');
+load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_19Networks.mat','IM');
 IM_Tu19 = IM;
 load('IM_Gordon_13nets_333Parcels_Renamed2024.mat','IM');
 IM_Gordon = IM;
-load('/data/wheelock/data1/parcellations/IM/IM_MyersLabonte_23Networks.mat','IM');
-IM_MyersLabonte = IM; IM_MyersLabonte.Nets{end} = 'Unspecified';
 clear IM
 % Load parcels
 Parcels_Tu_326 = smartload('Parcels_Tu_326.mat');
 Parcels_Gordon = smartload('Parcels_Gordon.mat');
-Parcels_MyersLabonte283 = smartload('Parcels_Myers_Labonte_202310.mat');
 
 load('MNI_coord_meshes_32k.mat')
 Anat.CtxL = MNIl;Anat.CtxR = MNIr;clear MNIl MNIr
@@ -40,7 +33,7 @@ for bestk = bestks
     eval(['C_bestk',num2str(bestk),'= single(C_bestk',num2str(bestk),');'])
 end
 %% Assign each vertex
-namestr = 'BCP_Jan2023_QCpass_asleep_atleast8min_UNC_UMN_20240124'%'eLABE_Y2_N113_atleast600frames'%'BCP_Jan2023_QCpass_awake_atleast8min_UNC_UMN_20240124'% 'eLABE_Y2_N113_atleast600frames'%'BCP_Jan2023_QCpass_asleep_atleast8min_UNC_UMN_20240124'
+namestr = 'BCP_Jan2023_QCpass_asleep_atleast8min_UNC_UMN_20240124'
 result_file_path = ['./template_matching_results/',namestr,'_wholesession.mat'];
 T = readtable([master_dir,'/subject_tables/',namestr,'_vars.csv']);
 YearGroup = T.ses_id{1}
