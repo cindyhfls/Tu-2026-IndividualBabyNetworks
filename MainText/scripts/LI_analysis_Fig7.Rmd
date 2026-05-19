@@ -10,17 +10,36 @@ library(ggplot2)
 library(performance)
 library(influence.ME)
 ```
+```{r}
+
+# # For specific columns
+# sum(!is.na(data$VDQ))       # non-missing VDQ
+# sum(!is.na(data$NVDQ))      # non-missing NVDQ
+# sum(!is.na(data$age_yrs))   # non-missing age
+# sum(!is.na(data$age_yrs) & !is.na(data$VDQ) & !is.na(data$NVDQ))
+```
 ## BCP (Dataset 2, Figure 6)
 ```{r}
 data <-read.csv("LI_table_for_BCP.csv")
+nrow(data) # should be 280
 data$sub_id <- factor(data$sub_id)
-data$LI <-data$LI_18 # change here for network 18
+data$LI <-data$LI_1 # change here for network p
+# Scale the variables
+data$LI_scaled <- scale(data$LI)
+data$age_scaled <- scale(data$age_yrs)
+data$VDQ_scaled <- scale(data$mullen_VDQ)   
+data$NVDQ_scaled <- scale(data$mullen_NVDQ) 
 ```
 ```{r}
 # Age effect on laterality with random intercept in subjects
 m_age_lang <- lmer(LI ~ age_yrs + (1 | sub_id), data = data)
 summary(m_age_lang)
 r2(m_age_lang)
+
+# standardized
+m_age_lang_scaled <- lmer(LI_scaled ~ age_scaled + (1 | sub_id), data = data)
+summary(m_age_lang_scaled)
+r2(m_age_lang_scaled)
 ```
 
 ```{r}
@@ -98,14 +117,22 @@ m_ <- lm(
 )
 summary(m_)
 ```
+
 ```{r}
 # Question: laterality association with language performance 
 m_lang <- lmer(
-  LI ~ age_yrs + mullen_VDQ + (1 | sub_id),
+  LI ~ age_yrs + mullen_NVDQ + (1 | sub_id),
   data = data
 )
 summary(m_lang)
 r2(m_lang)
+
+m_lang_scaled <- lmer(
+  LI_scaled ~ age_scaled + NVDQ_scaled + (1 | sub_id),
+  data = data
+)
+summary(m_lang_scaled)
+r2(m_lang_scaled)
 ```
 ```{r}
 # outlier?
@@ -245,11 +272,20 @@ data$motcomp <- data$y2_motcomp
 data$motcomp[114:nrow(data)] <- data$y3_motcomp[114:nrow(data)]
 data <- data[complete.cases(data[, c("age_yrs", "LI_1", "langcomp")]), ]
 data$LI <-data$LI_18 # change here for network 18
+
+# scale
+data$LI_scaled <- scale(data$LI)
+data$age_scaled <- scale(data$age_yrs)
+data$langcomp_scaled <- scale(data$langcomp)   
+data$motcomp_scaled <- scale(data$motcomp) 
 ```
 ```{r}
 # Model simple prediction with random intercept in subjects
 # Age effect on laterality
 m_age_lang <- lmer(LI ~ age_yrs + (1 | sub_id), data = data)
+summary(m_age_lang)
+
+m_age_lang <- lmer(LI_scaled ~ age_scaled + (1 | sub_id), data = data)
 summary(m_age_lang)
 ```
 ```{r}
@@ -315,6 +351,12 @@ ggsave(
 # Question: laterality association with language performance 
 m_lang <- lmer(
   LI ~ age_yrs + langcomp + (1 | sub_id),
+  data = data
+)
+summary(m_lang)
+
+m_lang <- lmer(
+  LI_scaled ~ age_scaled + langcomp_scaled + (1 | sub_id),
   data = data
 )
 summary(m_lang)
