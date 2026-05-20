@@ -1,5 +1,5 @@
 ---
-title: "Statsitical analysis of network lateralization"
+title: "Statistical analysis of network lateralization"
 output: html_notebook
 ---
 ## Import packages
@@ -10,25 +10,17 @@ library(ggplot2)
 library(performance)
 library(influence.ME)
 ```
-```{r}
-
-# # For specific columns
-# sum(!is.na(data$VDQ))       # non-missing VDQ
-# sum(!is.na(data$NVDQ))      # non-missing NVDQ
-# sum(!is.na(data$age_yrs))   # non-missing age
-# sum(!is.na(data$age_yrs) & !is.na(data$VDQ) & !is.na(data$NVDQ))
-```
 ## BCP (Dataset 2, Figure 6)
 ```{r}
 data <-read.csv("LI_table_for_BCP.csv")
-nrow(data) # should be 280
+nrow(data) 
 data$sub_id <- factor(data$sub_id)
 data$LI <-data$LI_1 # change here for network p
 # Scale the variables
 data$LI_scaled <- scale(data$LI)
 data$age_scaled <- scale(data$age_yrs)
-data$VDQ_scaled <- scale(data$mullen_VDQ)   
-data$NVDQ_scaled <- scale(data$mullen_NVDQ) 
+data$VDQ_scaled <- scale(data$mullen_VDQ)
+data$NVDQ_scaled <- scale(data$mullen_NVDQ)
 ```
 ```{r}
 # Age effect on laterality with random intercept in subjects
@@ -55,14 +47,6 @@ max(cd)
 ```
 
 ```{r}
-# See standardized effect size to gauge whether effect size is small
-beta_std <- fixef(m_age_lang)["age_yrs"] *
-            sd(data$age_yrs, na.rm = TRUE) /
-            sd(data$LI, na.rm = TRUE)
-
-beta_std
-```
-```{r} 
 # Plot N.B. This 95% CI is for the fixed-effect (population-level) mean
 # Prediction grid
 age_grid <- seq(min(data$age_yrs, na.rm = TRUE),
@@ -119,7 +103,7 @@ summary(m_)
 ```
 
 ```{r}
-# Question: laterality association with language performance 
+# Question: laterality association with language performance
 m_lang <- lmer(
   LI ~ age_yrs + mullen_NVDQ + (1 | sub_id),
   data = data
@@ -147,7 +131,7 @@ max(cd)
 ```
 ```{r}
 # Plot scatter
-data$bhv <- data$mullen_VDQ
+data$bhv <- data$mullen_NVDQ
 bhv_grid <- seq(
   min(data$bhv, na.rm = TRUE),
   max(data$bhv, na.rm = TRUE),
@@ -176,6 +160,7 @@ pred_df$SE <- sqrt(diag(X %*% V %*% t(X)))
 pred_df$LI_lo <- pred_df$LI_pred - 1.96 * pred_df$SE
 pred_df$LI_hi <- pred_df$LI_pred + 1.96 * pred_df$SE
 ```
+
 ```{r}
 ggplot(data, aes(x = bhv, y = LI)) +
   geom_point(alpha = 0.4, size = 1) +
@@ -193,7 +178,7 @@ ggplot(data, aes(x = bhv, y = LI)) +
   ) +
   theme_classic() +
   labs(
-    x = "VDQ",
+    x = "NVDQ",
     y = "Laterality index"
   )
 
@@ -205,6 +190,7 @@ ggsave(
   dpi = 300
 )
 ```
+
 ```{r}
 # Permutation test
 set.seed(42)
@@ -222,7 +208,6 @@ y_hat <- fitted(m_red)
 e_hat <- resid(m_red)
 
 # Indices per subject (blocks)
-data$sub_id <- factor(data$sub_id)
 idx_by_sub <- split(seq_len(nrow(data)), data$sub_id)
 
 beta_perm <- numeric(B)
@@ -253,22 +238,14 @@ for (b in seq_len(B)) {
 p_perm <- mean(abs(beta_perm) >= abs(beta_obs))
 p_perm
 ```
-```{r}
-# Question: does LI mediates the relationship between age and mullen scores [removed because random intercept would complicate interpretation, here it is fixed effects only]
-library(mediation)  
-model.M <- lm(LI ~ age_yrs, data = data)  
-model.Y <- lm(mullen_VDQ ~ age_yrs+LI, data = data)  
-results <- mediate(model.M, model.Y, treat = "age_yrs", mediator = "LI", boot = TRUE, sims = 5000)  
-summary(results)  
-```
 
 # eLABE (Dataset 1, Supplementary)
 ```{r}
 data <-read.csv("LI_table_for_eLABE.csv")
 data$sub_id <- factor(data$sub_id)
-data$langcomp <- data$y2_langcomp  
+data$langcomp <- data$y2_langcomp
 data$langcomp[114:nrow(data)] <- data$y3_langcomp[114:nrow(data)]
-data$motcomp <- data$y2_motcomp  
+data$motcomp <- data$y2_motcomp
 data$motcomp[114:nrow(data)] <- data$y3_motcomp[114:nrow(data)]
 data <- data[complete.cases(data[, c("age_yrs", "LI_1", "langcomp")]), ]
 data$LI <-data$LI_18 # change here for network 18
@@ -276,17 +253,19 @@ data$LI <-data$LI_18 # change here for network 18
 # scale
 data$LI_scaled <- scale(data$LI)
 data$age_scaled <- scale(data$age_yrs)
-data$langcomp_scaled <- scale(data$langcomp)   
-data$motcomp_scaled <- scale(data$motcomp) 
+data$langcomp_scaled <- scale(data$langcomp)
+data$motcomp_scaled <- scale(data$motcomp)
 ```
 ```{r}
 # Model simple prediction with random intercept in subjects
 # Age effect on laterality
 m_age_lang <- lmer(LI ~ age_yrs + (1 | sub_id), data = data)
 summary(m_age_lang)
+r2(m_age_lang)
 
-m_age_lang <- lmer(LI_scaled ~ age_scaled + (1 | sub_id), data = data)
-summary(m_age_lang)
+m_age_lang_scaled <- lmer(LI_scaled ~ age_scaled + (1 | sub_id), data = data)
+summary(m_age_lang_scaled)
+r2(m_age_lang_scaled)
 ```
 ```{r}
 # outlier?
@@ -348,18 +327,20 @@ ggsave(
 )
 ```
 ```{r}
-# Question: laterality association with language performance 
+# Question: laterality association with language performance
 m_lang <- lmer(
   LI ~ age_yrs + langcomp + (1 | sub_id),
   data = data
 )
 summary(m_lang)
+r2(m_lang)
 
-m_lang <- lmer(
+m_lang_scaled <- lmer(
   LI_scaled ~ age_scaled + langcomp_scaled + (1 | sub_id),
   data = data
 )
-summary(m_lang)
+summary(m_lang_scaled)
+r2(m_lang_scaled)
 ```
 ```{r}
 # outlier?
@@ -432,13 +413,3 @@ ggsave(
   dpi = 300
 )
 ```
-```{r} 
-# [removed because it cannot handle random effect] Question: does LI mediates the relationship between age and language
-library(mediation)  
-model.M <- lm(LI ~ age_yrs, data = data)  
-model.Y <- lm(langcomp ~ age_yrs+LI, data = data)  
-results <- mediate(model.M, model.Y, treat = "age_yrs", mediator = "LI", boot = TRUE, sims = 5000)  
-summary(results)  
-```
-
-

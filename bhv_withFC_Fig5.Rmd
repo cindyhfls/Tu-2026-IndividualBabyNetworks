@@ -8,7 +8,7 @@ date: '2026-01-05'
 library(lme4)
 library(lmerTest)
 library(ggplot2)
-library(performance)
+library(MASS)
 ```
 # eLABE (Dataset 1)
 ```{r}
@@ -28,7 +28,7 @@ data$sub_id <- factor(data$sub_id)
 data$grp <- data$grp_23
 data$ind <- data$ind_23
 
-# Linear mixed effects model for association with age
+# Linear model for association with age
 ## Baseline model (covariates only)
 m0 <- lm(age_yrs ~ FD_mean_total, data = data)
 # If adding sex:
@@ -57,22 +57,23 @@ anova(m0, m_grp)
 anova(m0, m_ind)
 ```
 ```{r}
-m_grp <- lm(age_yrs ~ FD_mean_total + grp_1+grp_2+grp_3+grp_4+grp_5+grp_6+grp_7+grp_8+grp_9+grp_10+grp_11+grp_12+grp_13+grp_14+grp_15+grp_16+grp_17+grp_18+grp_19+grp_20+grp_21+grp_22+grp_23, data = data)
+grp_cols <- paste0("grp_", 1:23)
+ind_cols <- paste0("ind_", 1:23)
+
+m_grp <- lm(reformulate(c("FD_mean_total", grp_cols), "age_yrs"), data = data)
 summary(m_grp)
 
-m_ind <- lm(age_yrs ~ FD_mean_total + ind_1+ind_2+ind_3+ind_4+ind_5+ind_6+ind_7+ind_8+ind_9+ind_10+ind_11+ind_12+ind_13+ind_14+ind_15+ind_16+ind_17+ind_18+ind_19+ind_20+ind_21+ind_22+ind_23, data = data)
+m_ind <- lm(reformulate(c("FD_mean_total", ind_cols), "age_yrs"), data = data)
 summary(m_ind)
 ```
 
 ```{r}
-library(MASS)
-
 set.seed(123)
 
 # ---- user inputs ----
 subject_col <- "sub_id"
-y_col <- "age_yrs"
-fd_col <- "FD_mean_total"
+y_col       <- "age_yrs"
+fd_col      <- "FD_mean_total"
 
 grp_cols <- paste0("grp_", 1:23)
 ind_cols <- paste0("ind_", 1:23)
@@ -92,51 +93,43 @@ make_group_folds <- function(subject, k = 5) {
 
 fold_id <- make_group_folds(data_cv[[subject_col]], 5)
 
-# ---- helper: ridge CV ----
+# ---- helper: ridge CV with GCV lambda selection (built into MASS::lm.ridge) ----
+lambdas <- seq(0.01, 50, length.out = 50)
+
 ridge_cv <- function(df, fold_id, y_col, base_cols, feat_cols, lambdas) {
-  n <- nrow(df)
+  n    <- nrow(df)
   pred <- rep(NA_real_, n)
 
   for (k in unique(fold_id)) {
-    test <- which(fold_id == k)
+    test  <- which(fold_id == k)
     train <- which(fold_id != k)
 
     x_train <- as.matrix(df[train, c(base_cols, feat_cols)])
-    y_train <- df[[y_col]][train]
-    x_test <- as.matrix(df[test, c(base_cols, feat_cols)])
+    y_train  <- df[[y_col]][train]
+    x_test   <- as.matrix(df[test,  c(base_cols, feat_cols)])
 
     # standardize using training stats
-    mu <- colMeans(x_train)
+    mu  <- colMeans(x_train)
     sdv <- apply(x_train, 2, sd)
-    x_train <- scale(x_train, mu, sdv)
-    x_test <- scale(x_test, mu, sdv)
+    x_train_s <- scale(x_train, mu, sdv)
+    x_test_s  <- scale(x_test,  mu, sdv)
 
-    # inner CV to choose lambda
-    cv_r2 <- sapply(lambdas, function(lam) {
-      fit <- lm.ridge(y_train ~ x_train, lambda = lam)
-      beta <- coef(fit)
-      yhat <- cbind(1, x_train) %*% beta
-      cor(yhat, y_train)^2
-    })
+    # fit all lambdas at once; lm.ridge returns GCV for each — pick the minimum
+    fits     <- lm.ridge(y_train ~ x_train_s, lambda = lambdas)
+    best_idx <- which.min(fits$GCV)
+    beta     <- coef(fits)[best_idx, ]
 
-    best_lam <- lambdas[which.max(cv_r2)]
-
-    fit <- lm.ridge(y_train ~ x_train, lambda = best_lam)
-    beta <- coef(fit)
-
-    pred[test] <- cbind(1, x_test) %*% beta
+    pred[test] <- cbind(1, x_test_s) %*% beta
   }
 
   y <- df[[y_col]]
   list(
-    r = cor(pred, y),
-    r2 = cor(pred, y)^2,
+    r    = cor(pred, y),
+    r2   = cor(pred, y)^2,
     rmse = sqrt(mean((pred - y)^2)),
     pred = pred
   )
 }
-
-lambdas <- seq(0, 50, length.out = 50)
 
 # ---- run models ----
 res_grp <- ridge_cv(data_cv, fold_id, y_col, fd_col, grp_cols, lambdas)
@@ -144,6 +137,4 @@ res_ind <- ridge_cv(data_cv, fold_id, y_col, fd_col, ind_cols, lambdas)
 
 cat(sprintf("Group: r = %.3f, R2 = %.3f\n", res_grp$r, res_grp$r2))
 cat(sprintf("Indiv: r = %.3f, R2 = %.3f\n", res_ind$r, res_ind$r2))
-
 ```
-

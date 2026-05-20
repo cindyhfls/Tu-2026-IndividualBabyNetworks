@@ -3,3 +3,6 @@
 ## Abstract 
 Functional brain networks support human cognition, yet how individualized network architecture emerges in early childhood remains poorly understood. Averaging across participants can obscure age-specific organization and person-to-person differences, particularly in slowly developing association cortices. We developed an age-appropriate functional reference that captured common structure across toddlers without averaging away individual variability, enabling estimation of each child’s networks from resting-state fMRI.
 Across cohorts of 8-60-month-old children, we found individualized network organization-including finer-scale subdivisions and emerging language lateralization-well before age five. Network layouts showed longitudinal stability, with greater consistency in sensory than association regions. Within-network connectivity was stronger and explained age-related variance when networks were defined using individualized rather than group-consensus topography. Left-lateralization of language networks tracked age-normalized verbal ability, linking early functional architecture to emerging cognition. These findings show that behaviorally relevant brain networks arise far earlier than previously recognized, providing a foundation for studying typical development and early biomarkers.
+
+Contact:
+Jiaxin Cindy Tu (jiaxintucam@gmail.com)

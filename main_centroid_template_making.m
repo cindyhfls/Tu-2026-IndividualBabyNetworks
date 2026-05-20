@@ -1,21 +1,12 @@
 clear
 [master_dir, ~, ~] = fileparts(mfilename('fullpath'));
-addpath(genpath(master_dir))
-addpath(genpath('../BrBx-HSB_infomap_cleanup'));
-addpath(genpath('../NLA_toolbox_070319/NLA visualizationfunctions'));
+addpath(genpath(master_dir)) % includes Util/ (smartload, adj_rand_index_mod) and CIFTI_read_save/
 
-load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_19Networks.mat','IM');
-IM_Tu19 = IM;
-load('../Tu-2024-AreaParcellationInfants/NetworkCommunityAssignments/IM_Tu326_12Networks.mat','IM');
-IM_Tu12 = IM;
-load('IM_Gordon_13nets_333Parcels_Renamed2024.mat','IM');
-IM_Gordon = IM;
-clear IM
+% Load IM (network assignments)
+load('IM_Tu326_19Networks.mat','IM');
 
 % Load parcels
-Parcels_Tu_326 = smartload('Parcels_Tu_326.mat');
-Parcels_Gordon = smartload('Parcels_Gordon.mat');
-Parcels_MyersLabonte283 = smartload('Parcels_Myers_Labonte_202310.mat');
+Parcels = smartload('Parcels_Tu_326.mat');
 
 load('MNI_coord_meshes_32k.mat')
 Anat.CtxL = MNIl;Anat.CtxR = MNIr;clear MNIl MNIr
@@ -23,93 +14,135 @@ Anat.CtxL = MNIl;Anat.CtxR = MNIr;clear MNIl MNIr
 namestr1 = 'eLABE_Y2_N113_atleast600frames'
 namestr2 = 'eLABE_Y3_N86'
 parcelname = 'Tu_326'
-IM = IM_Tu19;
-Parcels = Parcels_Tu_326;
 K = 19
+
 centroid_filename = 'eLABE_Y2_Y3_template_dim326'
 
-[SI,h] = silhouette(template_X,template_y,'correlation');
-mSI = mean(SI)
-figure('position',[100 100 250 250]);
-histogram(SI,-1:0.05:1,'EdgeColor','none','normalization','PDF');
-xline(mSI,'Color','r');
-xlabel('SI');
-ylabel('PDF');
-set(gca,'FontSize',12);
-print(['./Figure/eLABE_template_initial_SI_',method,'Zdim',num2str(zdim)],'-dpng','-r300');
-
-figure('position',[100 100 800 400]);
-xlim([0,K+1]);
-ylim([-1,1]);
-for inet = 1:K
-    v = Violin(SI(template_y==inet),inet,'ViolinColor',IM.cMap(inet,:));
-    v.ScatterPlot.SizeData = 10;
+%% Load subject table and FC data
+T = [readtable([master_dir,'/subject_tables/',namestr1,'_vars.csv']);...
+    readtable([master_dir,'/subject_tables/',namestr2,'_vars.csv'])];
+method = 'parcel'
+nROI = T.parcel_number(1)
+switch method
+    case 'parcel'
+        files = dir(['./datasets/eLABE/pconns/',namestr1,'_parcellation_',parcelname,'*.mat'])
+        load(fullfile(files(1).folder,files(1).name),'zmat')
+        rmat1 = tanh(zmat);
+        files = dir(['./datasets/eLABE/pconns/',namestr2,'_parcellation_',parcelname,'*.mat'])
+        load(fullfile(files(1).folder,files(1).name),'zmat')
+        rmat2 = tanh(zmat);
+        rmat = cat(3,rmat1,rmat2);
+        for ii = 1:nROI
+            rmat(ii,ii,:) = 1;
+        end
+        allz = shiftdim(rmat,1);
+        zdim = nROI;
 end
-ylabel('SI');
-xlabel('Networks');
-xticks(1:max(template_y));
-xticklabels(IM.Nets);
-xtickangle(35);
-set(gca,'FontSize',12);
-print(['./Figure/eLABE_template_initial_SI_violinplot_',method,'Zdim',num2str(zdim)],'-dpng','-r300');
+clear zmat
+allz = reshape(allz,nROI,[],zdim);
 
-centroids_init_corr = NaN(K,nROI);D_init = cell(K,1);sumd_init = NaN(K,1);
-for inet = 1:K
-    [~,centroids_init_corr(inet,:),sumd_init(inet),D_init{inet}] = kmeans(template_X(template_y==inet,:),1,'distance','correlation','start','plus','Display','off','Replicates',1);
-end
-%% Plot the intial centroids based on the group-level assignments
-cmap = ROY_BIG_BL(100);
-colorrange = [-0.2,0.2];
-for inet = 1:K
-    vals = centroids_init_corr(inet,:)';
-    f = figure('position',[100 100 385 275]);
-    ax1 = subplot(2,1,1);
-    set(ax1,'Position',[0,0.5,0.85,0.5]);
-    plot_parcels_by_values(vals,Anat,'lat',Parcels,colorrange,cmap)
-    ax2 = subplot(2,1,2);
-    set(ax2,'Position',[0,0.05,0.85,0.5]);
-    plot_parcels_by_values(vals,Anat,'med',Parcels,colorrange,cmap)
-    
-    h = axes(f,'visible','off'); % attach colorbar to h
-    c = colorbar(h,'Position',[0.88 0.1680 0.022 0.7],'XTick',[0,1],'XTicklabel',colorrange,'FontSize',12);
-    colormap(c,cmap);
-    exportgraphics(gcf,['./Figure/NetworkTemplate_',num2str(inet),'.png'],'Resolution',300)
-    close all
+% Get the template points
+[~,sortid] = sort(IM.order);
+Nsess = sum(T.in_template==1)
+assn_orig = repmat(IM.key(sortid,2),1,Nsess);
+template_X = reshape(allz(:,T.in_template==1,:),[],zdim);
+template_y = reshape(assn_orig,[],1);
+
+maxk = 40;
+Nsplits = 20; % randomly split the sample into half 20 times
+[ARI,NMI] = deal(NaN(Nsplits,maxk));
+split1_sub = cell(1,Nsplits);
+rng(1);
+for isplit = 1:Nsplits
+    split1_sub{isplit} = randsample(Nsess,Nsplits,false);
 end
 
-%% Save centroids
-save([centroid_filename,'_centroids.mat'],'centroids*');
+%% Compute initial centroids (skipped if centroids file already exists)
+try
+    load([centroid_filename,'_centroids.mat'])
+catch
+    [SI,h] = silhouette(template_X,template_y,'correlation');
+    mSI = mean(SI)
+    figure('position',[100 100 250 250]);
+    histogram(SI,-1:0.05:1,'EdgeColor','none','normalization','PDF');
+    xline(mSI,'Color','r');
+    xlabel('SI');
+    ylabel('PDF');
+    set(gca,'FontSize',12);
+    print(['./Figure/eLABE_template_initial_SI_',method,'Zdim',num2str(zdim)],'-dpng','-r300');
+
+    figure('position',[100 100 800 400]);
+    xlim([0,K+1]);
+    ylim([-1,1]);
+    for inet = 1:K
+        v = Violin(SI(template_y==inet),inet,'ViolinColor',IM.cMap(inet,:));
+        v.ScatterPlot.SizeData = 10;
+    end
+    ylabel('SI');
+    xlabel('Networks');
+    xticks(1:max(template_y));
+    xticklabels(IM.Nets);
+    xtickangle(35);
+    set(gca,'FontSize',12);
+    print(['./Figure/eLABE_template_initial_SI_violinplot_',method,'Zdim',num2str(zdim)],'-dpng','-r300');
+
+    centroids_init_corr = NaN(K,nROI);D_init = cell(K,1);sumd_init = NaN(K,1);
+    for inet = 1:K
+        [~,centroids_init_corr(inet,:),sumd_init(inet),D_init{inet}] = kmeans(template_X(template_y==inet,:),1,'distance','correlation','start','plus','Display','off','Replicates',1);
+    end
+    %% Plot the initial centroids based on the group-level assignments
+    cmap = ROY_BIG_BL(100);
+    colorrange = [-0.2,0.2];
+    for inet = 1:K
+        vals = centroids_init_corr(inet,:)';
+        f = figure('position',[100 100 385 275]);
+        ax1 = subplot(2,1,1);
+        set(ax1,'Position',[0,0.5,0.85,0.5]);
+        plot_parcels_by_values(vals,Anat,'lat',Parcels,colorrange,cmap)
+        ax2 = subplot(2,1,2);
+        set(ax2,'Position',[0,0.05,0.85,0.5]);
+        plot_parcels_by_values(vals,Anat,'med',Parcels,colorrange,cmap)
+        h = axes(f,'visible','off'); % attach colorbar to h
+        c = colorbar(h,'Position',[0.88 0.1680 0.022 0.7],'XTick',[0,1],'XTicklabel',colorrange,'FontSize',12);
+        colormap(c,cmap);
+        exportgraphics(gcf,['./Figure/NetworkTemplate_',num2str(inet),'.png'],'Resolution',300)
+        close all
+    end
+    %% Save centroids
+    save([centroid_filename,'_centroids.mat'],'centroids*');
+end
 
 %% K-means with cross-validation to find K
-%% Calculate different number of clusters
-% N.B. It seems 100 replicates produces more stable results across split
-% halves than 10 replicates
-stream = RandStream('mlfg6331_64');  % Random number stream
-options = statset('UseParallel',1,'UseSubstreams',1,...
-    'Streams',stream);
-if isempty(gcp('nocreate'))
-    parpool(10);
-end
-tic
-for k = 1:maxk
-    for isplit = 1:Nsplits
-        split1_id = false(nROI,Nsess);split1_id(:,split1_sub{isplit})=true;
-        split1_id = reshape(split1_id,[],1);
-        rng(1);
-        [split1_assn,split1_C] = kmeans(template_X(split1_id,:),k,'distance','correlation','start','plus','Display','final','Replicates',100,'options',options);
-        [~,split2_hat] = pdist2(split1_C,template_X(~split1_id,:),'correlation','Smallest',1); % Find the nearest centroid
-        rng(1);
-        [split2_assn] = kmeans(template_X(~split1_id,:),k,'distance','correlation','start','plus','Display','final','Replicates',100,'options',options);
-        [ARI(isplit,k)] = adj_rand_index_mod(split2_hat,split2_assn);
-        [~,NMI(isplit,k)] = partition_distance(split2_hat',split2_assn);
+try
+    load([centroid_filename,'_kmeans_stability.mat'])
+catch
+    %% Calculate different number of clusters
+    % N.B. It seems 100 replicates produces more stable results across split
+    % halves than 10 replicates
+    stream = RandStream('mlfg6331_64');  % Random number stream
+    options = statset('UseParallel',1,'UseSubstreams',1,...
+        'Streams',stream);
+    if isempty(gcp('nocreate'))
+        parpool(10);
     end
-    toc
+    tic
+    for k = 1:maxk
+        for isplit = 1:Nsplits
+            split1_id = false(nROI,Nsess);split1_id(:,split1_sub{isplit})=true;
+            split1_id = reshape(split1_id,[],1);
+            rng(1);
+            [split1_assn,split1_C] = kmeans(template_X(split1_id,:),k,'distance','correlation','start','plus','Display','final','Replicates',100,'options',options);
+            [~,split2_hat] = pdist2(split1_C,template_X(~split1_id,:),'correlation','Smallest',1); % Find the nearest centroid
+            rng(1);
+            [split2_assn] = kmeans(template_X(~split1_id,:),k,'distance','correlation','start','plus','Display','final','Replicates',100,'options',options);
+            [ARI(isplit,k)] = adj_rand_index_mod(split2_hat,split2_assn);
+            [~,NMI(isplit,k)] = partition_distance(split2_hat',split2_assn);
+        end
+        toc
+    end
+    save([centroid_filename,'_kmeans_stability.mat'],'ARI','NMI')
 end
-save([centroid_filename,'_kmeans_stability.mat'],'ARI','NMI')
-
 %% Plot stability
-load([centroid_filename,'_kmeans_stability.mat'],'ARI','NMI')
-
 figure;
 boxplot(ARI)
 ylim([0.5,1]);
@@ -138,16 +171,16 @@ set(gca,'FontSize',12);
 %% Fit the final k with all data and save the best k centroid
 bestk = 23 % based on stability
 tic
-rng(1);[assn_bestk,C_bestk] = kmeans(template_X,bestk,'distance','correlation','start','plus','Display','final','Replicates',1000,'options',options);
+rng(1);[assn_bestk,C_bestk23] = kmeans(template_X,bestk,'distance','correlation','start','plus','Display','final','Replicates',1000,'options',options);
 toc
 
 %% if we have the Centroids already
-[D_bestk,assn_bestk] = pdist2(C_bestk,template_X,'correlation','Smallest',1);
+[D_bestk,assn_bestk] = pdist2(C_bestk23,template_X,'correlation','Smallest',1);
 assn_bestk = assn_bestk';
 
 %% View on the brain
 k = bestk
-eval('assn = assn_bestk;',num2str(bestk));
+assn = assn_bestk;
 
 assn = reshape(assn,nROI,[]);
 prop = calc_network_prop(assn,1:k);
